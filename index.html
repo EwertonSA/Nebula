@@ -1,0 +1,816 @@
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>A Star, Letting Go — Planetary Nebula</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<style>
+  html, body { height: 100%; background: #01030a; overflow: hidden; }
+  body { font-family: 'IBM Plex Mono', monospace; -webkit-font-smoothing: antialiased; }
+  .font-display { font-family: 'Instrument Serif', serif; }
+
+  #scene canvas { display: block; }
+
+  /* ---------- vignette + grade ---------- */
+  .vignette {
+    background:
+      radial-gradient(ellipse 120% 90% at 50% 42%, transparent 52%, rgba(0,0,0,0.62) 100%),
+      linear-gradient(to bottom, rgba(1,3,10,0.55), transparent 18%, transparent 82%, rgba(1,3,10,0.6));
+  }
+
+  /* ---------- film grain ---------- */
+  .grain {
+    position: fixed; inset: -12%;
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/></filter><rect width="100%" height="100%" filter="url(%23n)"/></svg>');
+    opacity: 0.05;
+    mix-blend-mode: overlay;
+    animation: grainShift 0.85s steps(4) infinite;
+  }
+  @keyframes grainShift {
+    0% { transform: translate(0,0); }
+    25% { transform: translate(-2.5%,1.8%); }
+    50% { transform: translate(2%,-2.2%); }
+    75% { transform: translate(-1.6%,-1.4%); }
+    100% { transform: translate(0,0); }
+  }
+
+  /* ---------- HUD ---------- */
+  .hud-kicker { font-size: 9px; letter-spacing: 0.42em; text-transform: uppercase; }
+  .hud-label  { font-size: 9px; letter-spacing: 0.28em; text-transform: uppercase; }
+
+  .hud-panel {
+    background: rgba(4,7,14,0.38);
+    border: 1px solid rgba(255,255,255,0.10);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+
+  .hud-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 9px; letter-spacing: 0.26em; text-transform: uppercase;
+    color: rgba(255,255,255,0.82);
+    border: 1px solid rgba(255,255,255,0.16);
+    background: rgba(6,10,18,0.42);
+    padding: 9px 14px;
+    transition: background .25s ease, border-color .25s ease, color .25s ease;
+    cursor: pointer;
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  }
+  .hud-btn:hover { background: rgba(255,255,255,0.10); border-color: rgba(255,255,255,0.34); color: #fff; }
+
+  .view-btn {
+    font-size: 9px; letter-spacing: 0.26em; text-transform: uppercase;
+    color: rgba(255,255,255,0.5); padding: 6px 2px;
+    border-bottom: 1px solid transparent;
+    transition: color .25s ease, border-color .25s ease; cursor: pointer;
+  }
+  .view-btn:hover { color: #fff; border-color: rgba(255,255,255,0.5); }
+
+  .mode-dot { width: 6px; height: 6px; border-radius: 9999px; animation: pulse 2.2s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.25; } }
+
+  .chip { width: 8px; height: 8px; flex: none; }
+
+  /* ---------- range sliders ---------- */
+  input[type="range"] { -webkit-appearance: none; appearance: none; background: transparent; cursor: pointer; height: 14px; width: 110px; }
+  input[type="range"]::-webkit-slider-runnable-track { height: 1px; background: rgba(255,255,255,0.22); }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 9px; height: 9px; margin-top: -4px;
+    background: #0b101c; border: 1px solid rgba(255,255,255,0.85); transform: rotate(45deg);
+  }
+  input[type="range"]::-moz-range-track { height: 1px; background: rgba(255,255,255,0.22); }
+  input[type="range"]::-moz-range-thumb {
+    width: 9px; height: 9px; background: #0b101c;
+    border: 1px solid rgba(255,255,255,0.85); border-radius: 0; transform: rotate(45deg);
+  }
+
+  /* ---------- loader ---------- */
+  #loader { transition: opacity 1.1s ease; }
+  .loader-bar { animation: load 1.4s cubic-bezier(.65,0,.35,1) forwards; }
+  @keyframes load { from { width: 0%; } to { width: 100%; } }
+
+  .fade-slow { transition: opacity 1.4s ease; }
+
+  ::selection { background: rgba(125,240,214,0.25); }
+</style>
+</head>
+
+<body class="text-white">
+
+  <!-- 3D SCENE -->
+  <div id="scene" class="fixed inset-0"></div>
+
+  <!-- GRADE OVERLAYS -->
+  <div class="vignette fixed inset-0 pointer-events-none z-10"></div>
+  <div class="grain pointer-events-none z-10"></div>
+
+  <!-- HUD -->
+  <div class="fixed inset-0 z-20 pointer-events-none select-none">
+
+    <!-- top-left : title -->
+    <header class="absolute top-0 left-0 p-6 md:p-10 max-w-xl">
+      <p class="hud-kicker text-white/45">M57-class event · live simulation</p>
+      <h1 class="font-display italic font-normal leading-[1.02] mt-3 text-[clamp(30px,4.6vw,58px)] text-[#f2eee4]">
+        A star, letting go.
+      </h1>
+      <p class="hud-label text-white/40 mt-4 leading-relaxed normal-case tracking-[0.12em] text-[10px] max-w-md">
+        An envelope thrown off in two great exhalations — a bright young shell,
+        a fainter elder one — while what remains burns white at the centre.
+      </p>
+    </header>
+
+    <!-- top-right : mode badge -->
+    <div class="absolute top-6 right-6 md:top-10 md:right-10 flex items-center gap-3 hud-panel px-4 py-2.5">
+      <span id="modeDot" class="mode-dot" style="background:#7df0d6; box-shadow:0 0 10px #7df0d6;"></span>
+      <span id="modeLabel" class="hud-kicker text-white/80">Drift</span>
+    </div>
+
+    <!-- bottom-left : legend + telemetry -->
+    <aside class="absolute bottom-6 left-6 md:bottom-10 md:left-10 hidden sm:block hud-panel px-5 py-4">
+      <div class="space-y-2.5">
+        <div class="flex items-center gap-3">
+          <span class="chip" style="background:#63f2d9; box-shadow:0 0 8px #63f2d9;"></span>
+          <span class="hud-label text-white/60">Inner shell · [O III] 5007 Å</span>
+        </div>
+        <div class="flex items-center gap-3">
+          <span class="chip" style="background:#ff9a5c; box-shadow:0 0 8px #ff9a5c;"></span>
+          <span class="hud-label text-white/60">Outer shell · H-α 6563 Å</span>
+        </div>
+        <div class="flex items-center gap-3">
+          <span class="chip" style="background:#ffffff; box-shadow:0 0 10px #cfe2ff;"></span>
+          <span class="hud-label text-white/60">Remnant · white dwarf 120 000 K</span>
+        </div>
+      </div>
+      <div class="border-t border-white/10 mt-4 pt-3">
+        <span id="tele" class="hud-label text-white/45">CAM R — · θ — · φ —</span>
+      </div>
+    </aside>
+
+    <!-- bottom-right : controls -->
+    <aside class="absolute bottom-6 right-6 md:bottom-10 md:right-10 pointer-events-auto">
+      <div class="flex flex-col items-end gap-4">
+
+        <div class="flex items-center gap-3">
+          <button id="btnOrbit" class="hud-btn"><i data-lucide="orbit" class="w-3.5 h-3.5"></i><span>Free orbit</span></button>
+          <button id="btnDrift" class="hud-btn hidden"><i data-lucide="waypoints" class="w-3.5 h-3.5"></i><span>Resume drift</span></button>
+        </div>
+
+        <div class="hud-panel px-5 py-4 flex flex-col gap-3.5">
+          <div class="flex items-center gap-5">
+            <span class="hud-label text-white/35">View</span>
+            <button id="viewFace" class="view-btn">Face-on</button>
+            <button id="viewEdge" class="view-btn">Edge-on</button>
+          </div>
+          <div class="border-t border-white/10"></div>
+          <div class="flex items-center justify-between gap-4">
+            <span class="hud-label text-white/35">Flux</span>
+            <input id="fluxRange" type="range" min="0.3" max="2" step="0.01" value="1" />
+            <span id="fluxVal" class="hud-label text-white/60 w-9 text-right">1.00</span>
+          </div>
+          <div class="flex items-center justify-between gap-4">
+            <span class="hud-label text-white/35">Speed</span>
+            <input id="speedRange" type="range" min="0.2" max="2" step="0.01" value="1" />
+            <span id="speedVal" class="hud-label text-white/60 w-9 text-right">1.0×</span>
+          </div>
+        </div>
+
+      </div>
+    </aside>
+
+    <!-- bottom-center hint -->
+    <div id="hint" class="absolute bottom-6 md:bottom-10 left-1/2 -translate-x-1/2 fade-slow">
+      <p class="hud-label text-white/35 text-center whitespace-nowrap">drag to orbit · scroll to zoom · double-click to drift</p>
+    </div>
+  </div>
+
+  <!-- LOADER -->
+  <div id="loader" class="fixed inset-0 z-50 bg-[#01030a] flex flex-col items-center justify-center gap-6">
+    <p class="hud-kicker text-white/50">Collapsing envelope</p>
+    <div class="w-48 h-px bg-white/10 overflow-hidden"><div class="loader-bar h-full bg-white/70"></div></div>
+    <p class="hud-label text-white/25">the ring is a shell seen true</p>
+  </div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+/* ============================================================
+   RENDERER / SCENE / CAMERA
+============================================================ */
+const container = document.getElementById('scene');
+const PR = Math.min(window.devicePixelRatio || 1, 1.75);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(PR);
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setClearColor(new THREE.Color(0.004, 0.006, 0.012));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+container.appendChild(renderer.domElement);
+renderer.domElement.addEventListener('contextmenu', e => e.preventDefault());
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 3000);
+
+/* ============================================================
+   SHARED GLSL — value noise + fbm
+============================================================ */
+const NOISE_GLSL = `
+float hash13(vec3 p){
+  p = fract(p * 0.31830989 + 0.1);
+  p *= 17.0;
+  return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+}
+float vnoise(vec3 x){
+  vec3 i = floor(x);
+  vec3 f = fract(x);
+  f = f * f * (3.0 - 2.0 * f);
+  float n000 = hash13(i);
+  float n100 = hash13(i + vec3(1.0,0.0,0.0));
+  float n010 = hash13(i + vec3(0.0,1.0,0.0));
+  float n110 = hash13(i + vec3(1.0,1.0,0.0));
+  float n001 = hash13(i + vec3(0.0,0.0,1.0));
+  float n101 = hash13(i + vec3(1.0,0.0,1.0));
+  float n011 = hash13(i + vec3(0.0,1.0,1.0));
+  float n111 = hash13(i + vec3(1.0,1.0,1.0));
+  return mix(mix(mix(n000,n100,f.x), mix(n010,n110,f.x), f.y),
+             mix(mix(n001,n101,f.x), mix(n011,n111,f.x), f.y), f.z);
+}
+float fbm(vec3 p){
+  float v = 0.0;
+  float a = 0.5;
+  for(int i = 0; i < 4; i++){
+    v += a * vnoise(p);
+    p = p * 2.07 + vec3(13.7, 7.1, 5.3);
+    a *= 0.52;
+  }
+  return v;
+}
+`;
+
+/* ============================================================
+   VOLUME SHELL MATERIAL — limb-brightened, wispy, additive.
+   uMode 0 : hollow shell (limb bright) · uMode 1 : filled glow
+============================================================ */
+const SHELL_VERT = `
+varying vec3 vW;
+varying vec3 vN;
+varying vec3 vV;
+void main(){
+  vec4 w = modelMatrix * vec4(position, 1.0);
+  vW = w.xyz;
+  vN = normalize(mat3(modelMatrix) * normal);
+  vV = cameraPosition - w.xyz;
+  gl_Position = projectionMatrix * viewMatrix * w;
+}
+`;
+
+const SHELL_FRAG = `
+uniform float uTime, uIntensity, uNoiseScale, uSeed, uFresnelPow, uFlow, uMode;
+uniform vec3 uColorA, uColorB;
+varying vec3 vW;
+varying vec3 vN;
+varying vec3 vV;
+${NOISE_GLSL}
+void main(){
+  vec3 V = normalize(vV);
+  vec3 N = normalize(vN);
+  float ndv = abs(dot(N, V));
+  float limb = pow(1.0 - ndv, uFresnelPow);
+  float shape = (uMode < 0.5)
+    ? (limb * 0.92 + 0.06)
+    : (pow(ndv, 2.0) * 0.7 + limb * 0.35);
+
+  float t = uTime * 0.045 * uFlow;
+  vec3 p = vW * uNoiseScale + vec3(uSeed * 7.31, uSeed * 3.17, uSeed * 5.77);
+  float n1 = fbm(p + vec3(t, -t * 0.6, t * 0.8));
+  float n2 = fbm(p * 2.6 - vec3(uSeed) + vec3(-t * 1.4, t * 0.9, -t * 0.7));
+  float wisp = smoothstep(0.32, 0.85, n1) * 0.75 + smoothstep(0.45, 0.95, n2) * 0.55;
+  float dens = 0.10 + clamp(wisp, 0.0, 1.3);
+
+  float a = shape * dens * uIntensity;
+  vec3 col = mix(uColorA, uColorB, smoothstep(0.15, 1.05, wisp));
+  col *= 0.75 + limb * 0.9;
+  gl_FragColor = vec4(col, a);
+}
+`;
+
+const fluxMaterials = [];
+function volumeMaterial(opts){
+  const mat = new THREE.ShaderMaterial({
+    uniforms: {
+      uTime:       { value: 0 },
+      uIntensity:  { value: opts.intensity },
+      uNoiseScale: { value: opts.noiseScale },
+      uSeed:       { value: opts.seed },
+      uFresnelPow: { value: opts.fresnelPow ?? 1.8 },
+      uFlow:       { value: opts.flow ?? 1.0 },
+      uMode:       { value: opts.mode ?? 0 },
+      uColorA:     { value: new THREE.Color(...opts.colorA) },
+      uColorB:     { value: new THREE.Color(...opts.colorB) },
+    },
+    vertexShader: SHELL_VERT,
+    fragmentShader: SHELL_FRAG,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+  mat.userData.baseIntensity = opts.intensity;
+  fluxMaterials.push(mat);
+  return mat;
+}
+
+/* ============================================================
+   THE TWO SHELLS — bright inner [O III], faint elder H-alpha
+============================================================ */
+function buildShell(cfg){
+  const group = new THREE.Group();
+  group.rotation.z = cfg.tilt ?? 0;
+  for (const layer of cfg.layers){
+    const geo = new THREE.TorusGeometry(cfg.major, cfg.tube, 52, 200);
+    const mat = volumeMaterial({
+      colorA: cfg.colorA, colorB: cfg.colorB,
+      intensity: layer.intensity,
+      noiseScale: cfg.noiseScale,
+      seed: layer.seed,
+      fresnelPow: cfg.fresnelPow,
+      flow: cfg.flow,
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.rotation.x = Math.PI / 2;      // ring plane -> XZ, axis -> Y
+    mesh.scale.setScalar(layer.scale);
+    group.add(mesh);
+  }
+  scene.add(group);
+  return group;
+}
+
+const innerShell = buildShell({
+  major: 8, tube: 1.9, tilt: 0.06,
+  colorA: [0.03, 0.19, 0.23], colorB: [0.45, 1.05, 0.88],   // ionised oxygen teal
+  noiseScale: 0.55, fresnelPow: 1.6, flow: 1.0,
+  layers: [ { scale: 1.0, intensity: 0.50, seed: 1.0 }, { scale: 1.05, intensity: 0.32, seed: 4.2 } ],
+});
+
+const outerShell = buildShell({
+  major: 14.8, tube: 3.6, tilt: -0.14,
+  colorA: [0.16, 0.045, 0.02], colorB: [1.10, 0.42, 0.17],  // hydrogen-alpha ember
+  noiseScale: 0.30, fresnelPow: 2.0, flow: 0.6,
+  layers: [ { scale: 1.0, intensity: 0.30, seed: 2.3 }, { scale: 1.07, intensity: 0.18, seed: 6.7 } ],
+});
+
+/* ---------- faint eldest spherical halo ---------- */
+const halo = new THREE.Mesh(
+  new THREE.SphereGeometry(23, 48, 32),
+  volumeMaterial({ colorA:[0.10,0.05,0.03], colorB:[0.5,0.24,0.12], intensity:0.05, noiseScale:0.18, seed:9.1, fresnelPow:3.0, flow:0.4 })
+);
+scene.add(halo);
+
+/* ---------- hot shocked bubble around the dwarf (X-ray cavity) ---------- */
+const bubble = new THREE.Mesh(
+  new THREE.SphereGeometry(4.4, 48, 32),
+  volumeMaterial({ colorA:[0.05,0.09,0.16], colorB:[0.5,0.75,1.1], intensity:0.10, noiseScale:0.8, seed:3.3, fresnelPow:2.0, mode:1, flow:1.3 })
+);
+scene.add(bubble);
+
+/* ---------- bipolar lobes — the hourglass hiding inside the ring ---------- */
+const lobeGeo = new THREE.SphereGeometry(3.6, 40, 28);
+for (const s of [1, -1]){
+  const lobe = new THREE.Mesh(
+    lobeGeo,
+    volumeMaterial({ colorA:[0.02,0.10,0.12], colorB:[0.35,0.8,0.75], intensity:0.055, noiseScale:0.7, seed: s > 0 ? 5.5 : 7.7, fresnelPow:2.0, flow:0.8 })
+  );
+  lobe.scale.set(1, 2.1, 1);
+  lobe.position.y = s * 4.4;
+  scene.add(lobe);
+}
+
+/* ============================================================
+   THE WHITE DWARF — tiny, hot, at the exact centre
+============================================================ */
+function glowTexture(){
+  const c = document.createElement('canvas'); c.width = c.height = 256;
+  const g = c.getContext('2d');
+  const grd = g.createRadialGradient(128,128,0,128,128,128);
+  grd.addColorStop(0.00, 'rgba(255,255,255,1)');
+  grd.addColorStop(0.16, 'rgba(214,232,255,0.85)');
+  grd.addColorStop(0.42, 'rgba(130,175,255,0.25)');
+  grd.addColorStop(1.00, 'rgba(0,20,60,0)');
+  g.fillStyle = grd; g.fillRect(0,0,256,256);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+const glowTex = glowTexture();
+
+const dwarf = new THREE.Mesh(
+  new THREE.SphereGeometry(0.17, 32, 24),
+  new THREE.MeshBasicMaterial({ color: new THREE.Color(3.0, 3.4, 4.2) })
+);
+scene.add(dwarf);
+
+function glowSprite(scale, opacity, sx, sy, rot){
+  const m = new THREE.SpriteMaterial({ map: glowTex, transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false, rotation: rot ?? 0 });
+  const s = new THREE.Sprite(m);
+  s.scale.set(sx ?? scale, sy ?? scale, 1);
+  scene.add(s);
+  return s;
+}
+const dwarfGlow  = glowSprite(3.6, 0.85);
+const dwarfCore  = glowSprite(1.4, 0.9);
+const spikeH     = glowSprite(0, 0.30, 7.5, 0.42, 0);
+const spikeV     = glowSprite(0, 0.22, 0.42, 6.0, 0);
+
+/* ============================================================
+   EXPANDING DUST — GPU-looped particles streaming off the shells
+============================================================ */
+const dustMaterials = [];
+function buildDust({ count, R, sigmaR, sigmaY, travel, speedMin, speedMax, colors, sizeMin, sizeMax }){
+  const pos = new Float32Array(count * 3);
+  const dir = new Float32Array(count * 3);
+  const col = new Float32Array(count * 3);
+  const spd = new Float32Array(count);
+  const pha = new Float32Array(count);
+  const siz = new Float32Array(count);
+  const gauss = () => (Math.random() + Math.random() + Math.random() - 1.5) * 1.15;
+
+  for (let i = 0; i < count; i++){
+    const th = Math.random() * Math.PI * 2;
+    const r = R + gauss() * sigmaR;
+    const y = gauss() * sigmaY;
+    pos[i*3]   = Math.cos(th) * r;
+    pos[i*3+1] = y;
+    pos[i*3+2] = Math.sin(th) * r;
+    const d = new THREE.Vector3(Math.cos(th), y * 0.06 + (Math.random()-0.5) * 0.3, Math.sin(th)).normalize();
+    dir[i*3] = d.x; dir[i*3+1] = d.y; dir[i*3+2] = d.z;
+    const c = colors[Math.floor(Math.random() * colors.length)];
+    const b = 0.5 + Math.random() * 0.6;
+    col[i*3] = c[0]*b; col[i*3+1] = c[1]*b; col[i*3+2] = c[2]*b;
+    spd[i] = speedMin + Math.random() * (speedMax - speedMin);
+    pha[i] = Math.random();
+    siz[i] = sizeMin + Math.random() * (sizeMax - sizeMin);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('aDir', new THREE.BufferAttribute(dir, 3));
+  geo.setAttribute('aColor', new THREE.BufferAttribute(col, 3));
+  geo.setAttribute('aSpeed', new THREE.BufferAttribute(spd, 1));
+  geo.setAttribute('aPhase', new THREE.BufferAttribute(pha, 1));
+  geo.setAttribute('aSize', new THREE.BufferAttribute(siz, 1));
+
+  const mat = new THREE.ShaderMaterial({
+    uniforms: { uTime:{value:0}, uPR:{value:PR}, uTravel:{value:travel}, uFlux:{value:1} },
+    vertexShader: `
+      attribute vec3 aDir; attribute vec3 aColor;
+      attribute float aSpeed, aPhase, aSize;
+      uniform float uTime, uPR, uTravel;
+      varying vec3 vC; varying float vA;
+      void main(){
+        float prog = fract(uTime * aSpeed + aPhase);
+        vec3 p = position + aDir * prog * uTravel;
+        vec4 mv = modelViewMatrix * vec4(p, 1.0);
+        vA = sin(prog * 3.14159); vA *= vA;
+        vC = aColor;
+        gl_PointSize = aSize * uPR * (300.0 / -mv.z) * (0.6 + 0.4 * vA);
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: `
+      uniform float uFlux;
+      varying vec3 vC; varying float vA;
+      void main(){
+        float d = length(gl_PointCoord - 0.5);
+        float a = smoothstep(0.5, 0.05, d);
+        gl_FragColor = vec4(vC, a * vA * 0.55 * uFlux);
+      }`,
+    transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
+  });
+  dustMaterials.push(mat);
+  const pts = new THREE.Points(geo, mat);
+  pts.frustumCulled = false;
+  scene.add(pts);
+}
+
+buildDust({ count: 650, R: 8,    sigmaR: 1.7, sigmaY: 1.6, travel: 6, speedMin: 0.008, speedMax: 0.020,
+  colors: [[0.4,1.0,0.86],[0.5,0.95,1.0],[0.75,1.0,0.9]], sizeMin: 0.6, sizeMax: 1.7 });
+buildDust({ count: 380, R: 14.8, sigmaR: 2.9, sigmaY: 2.7, travel: 9, speedMin: 0.005, speedMax: 0.012,
+  colors: [[1.0,0.5,0.24],[1.0,0.62,0.34],[0.9,0.38,0.2]], sizeMin: 0.8, sizeMax: 2.1 });
+
+/* ============================================================
+   STARFIELD + BACKGROUND DOME
+============================================================ */
+function buildStars(count){
+  const pos = new Float32Array(count * 3);
+  const col = new Float32Array(count * 3);
+  const siz = new Float32Array(count);
+  const pha = new Float32Array(count);
+  const palette = [[0.85,0.9,1.0],[1.0,0.92,0.78],[0.72,0.82,1.0],[1.0,1.0,1.0]];
+  for (let i = 0; i < count; i++){
+    const v = new THREE.Vector3().randomDirection().multiplyScalar(380 + Math.pow(Math.random(), 0.7) * 560);
+    pos[i*3] = v.x; pos[i*3+1] = v.y; pos[i*3+2] = v.z;
+    const c = palette[Math.floor(Math.random() * palette.length)];
+    const b = 0.45 + Math.random() * 0.75;
+    col[i*3] = c[0]*b; col[i*3+1] = c[1]*b; col[i*3+2] = c[2]*b;
+    siz[i] = 1.1 + Math.pow(Math.random(), 3) * 3.4;
+    pha[i] = Math.random() * Math.PI * 2;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('aColor', new THREE.BufferAttribute(col, 3));
+  geo.setAttribute('aSize', new THREE.BufferAttribute(siz, 1));
+  geo.setAttribute('aPhase', new THREE.BufferAttribute(pha, 1));
+  const mat = new THREE.ShaderMaterial({
+    uniforms: { uTime:{value:0}, uPR:{value:PR} },
+    vertexShader: `
+      attribute float aSize, aPhase; attribute vec3 aColor;
+      uniform float uTime, uPR;
+      varying vec3 vC; varying float vTw;
+      void main(){
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        float tw = 0.72 + 0.28 * sin(uTime * (0.6 + fract(aPhase) * 1.4) + aPhase * 7.0);
+        vTw = tw; vC = aColor;
+        gl_PointSize = aSize * uPR * tw * (340.0 / -mv.z);
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: `
+      varying vec3 vC; varying float vTw;
+      void main(){
+        float d = length(gl_PointCoord - 0.5);
+        float a = smoothstep(0.5, 0.02, d); a *= a;
+        gl_FragColor = vec4(vC * vTw, a * 0.9);
+      }`,
+    transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
+  });
+  const pts = new THREE.Points(geo, mat);
+  pts.frustumCulled = false;
+  scene.add(pts);
+  return mat;
+}
+const starMat = buildStars(2600);
+
+const dome = new THREE.Mesh(
+  new THREE.SphereGeometry(960, 32, 24),
+  new THREE.ShaderMaterial({
+    vertexShader: `varying vec3 vD; void main(){ vD = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+    fragmentShader: `
+      varying vec3 vD;
+      ${NOISE_GLSL}
+      void main(){
+        vec3 d = normalize(vD);
+        float g = smoothstep(-0.6, 0.9, d.y);
+        vec3 col = mix(vec3(0.012,0.016,0.030), vec3(0.004,0.006,0.012), g);
+        float band = fbm(d * 2.5 + vec3(3.0));
+        col += vec3(0.010,0.016,0.020) * smoothstep(0.55, 0.95, band);
+        gl_FragColor = vec4(col, 1.0);
+      }`,
+    side: THREE.BackSide, depthWrite: false,
+  })
+);
+dome.renderOrder = -10;
+scene.add(dome);
+
+/* ============================================================
+   POST — bloom for the hot core
+============================================================ */
+const composer = new EffectComposer(renderer);
+composer.setPixelRatio(PR);
+composer.setSize(window.innerWidth, window.innerHeight);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.15, 0.7, 0.18);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
+
+/* ============================================================
+   CAMERA CHOREOGRAPHY — drift <-> orbit <-> fly
+============================================================ */
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.dampingFactor = 0.06;
+controls.rotateSpeed = 0.5;
+controls.enablePan = false;
+controls.minDistance = 1.2;
+controls.maxDistance = 140;
+controls.autoRotate = false;
+controls.autoRotateSpeed = 0.45;
+
+const pose = { pos: new THREE.Vector3(), look: new THREE.Vector3() };
+function driftPose(t){
+  const a = t * 0.028;
+  const r = 19.5 + 10.5 * Math.sin(t * 0.045 + 1.2);
+  const y = 7.5 * Math.sin(t * 0.06 + 0.5);
+  pose.pos.set(Math.cos(a) * r, y, Math.sin(a) * r);
+  pose.look.set(Math.cos(t * 0.11) * 2.4, Math.sin(t * 0.09) * 1.7, Math.sin(t * 0.13) * 2.4);
+  return pose;
+}
+
+let mode = 'drift';                       // drift | orbit | transit
+let tSim = 0;
+const lookSmooth = new THREE.Vector3();
+driftPose(0);
+camera.position.copy(pose.pos);
+lookSmooth.copy(pose.look);
+camera.lookAt(lookSmooth);
+
+const trans = {
+  active: false, t: 0, dur: 2.6,
+  from: new THREE.Vector3(), fromLook: new THREE.Vector3(),
+  toPos: new THREE.Vector3(), toLook: new THREE.Vector3(),
+  useDrift: false, after: 'drift',
+};
+const smooth = k => k * k * (3 - 2 * k);
+
+function beginTransition({ toPos = null, toLook = null, useDrift = false, dur = 2.6, after = 'drift' }){
+  trans.active = true; trans.t = 0; trans.dur = dur;
+  trans.from.copy(camera.position);
+  trans.fromLook.copy(lookSmooth);
+  if (toPos) trans.toPos.copy(toPos);
+  if (toLook) trans.toLook.copy(toLook);
+  trans.useDrift = useDrift;
+  trans.after = after;
+  mode = 'transit';
+  controls.autoRotate = false;
+  updateModeUI();
+}
+
+function enterOrbit(){
+  trans.active = false;
+  mode = 'orbit';
+  controls.target.copy(lookSmooth);
+  controls.autoRotate = true;
+  updateModeUI();
+}
+
+controls.addEventListener('start', () => { if (mode !== 'orbit') enterOrbit(); });
+
+/* ---------- UI wiring ---------- */
+const modeLabel = document.getElementById('modeLabel');
+const modeDot = document.getElementById('modeDot');
+const btnOrbit = document.getElementById('btnOrbit');
+const btnDrift = document.getElementById('btnDrift');
+
+function updateModeUI(){
+  const map = {
+    drift:   ['Drift', '#7df0d6'],
+    orbit:   ['Free orbit', '#ffab7a'],
+    transit: ['Transit', '#e8e4da'],
+  };
+  const [txt, col] = map[mode];
+  modeLabel.textContent = txt;
+  modeDot.style.background = col;
+  modeDot.style.boxShadow = `0 0 10px ${col}`;
+  btnOrbit.classList.toggle('hidden', mode !== 'drift');
+  btnDrift.classList.toggle('hidden', mode === 'drift');
+}
+
+btnOrbit.addEventListener('click', enterOrbit);
+btnDrift.addEventListener('click', () => beginTransition({ useDrift: true, dur: 2.8, after: 'drift' }));
+renderer.domElement.addEventListener('dblclick', () => {
+  if (mode !== 'drift') beginTransition({ useDrift: true, dur: 2.8, after: 'drift' });
+});
+document.getElementById('viewFace').addEventListener('click', () =>
+  beginTransition({ toPos: new THREE.Vector3(0.8, 34, 0.9), toLook: new THREE.Vector3(0,0,0), dur: 2.4, after: 'orbit' }));
+document.getElementById('viewEdge').addEventListener('click', () =>
+  beginTransition({ toPos: new THREE.Vector3(37, 1.6, 0), toLook: new THREE.Vector3(0,0,0), dur: 2.4, after: 'orbit' }));
+
+const fluxRange = document.getElementById('fluxRange');
+const speedRange = document.getElementById('speedRange');
+const fluxVal = document.getElementById('fluxVal');
+const speedVal = document.getElementById('speedVal');
+let speedScale = 1;
+
+fluxRange.addEventListener('input', () => {
+  const v = parseFloat(fluxRange.value);
+  fluxVal.textContent = v.toFixed(2);
+  for (const m of fluxMaterials) m.uniforms.uIntensity.value = m.userData.baseIntensity * v;
+  for (const m of dustMaterials) m.uniforms.uFlux.value = v;
+});
+speedRange.addEventListener('input', () => {
+  speedScale = parseFloat(speedRange.value);
+  speedVal.textContent = speedScale.toFixed(1) + '×';
+});
+
+/* ---------- telemetry ---------- */
+const tele = document.getElementById('tele');
+let lastTele = 0;
+function updateTelemetry(now){
+  if (now - lastTele < 180) return;
+  lastTele = now;
+  const r = camera.position.length();
+  const az = (Math.atan2(camera.position.z, camera.position.x) * 180 / Math.PI + 360) % 360;
+  const pol = Math.acos(THREE.MathUtils.clamp(camera.position.y / r, -1, 1)) * 180 / Math.PI;
+  tele.textContent = `CAM R ${r.toFixed(1)} · θ ${az.toFixed(1)}° · φ ${pol.toFixed(1)}° · ×${speedScale.toFixed(1)}`;
+}
+
+/* ---------- hint fade ---------- */
+setTimeout(() => document.getElementById('hint').style.opacity = '0', 7000);
+
+/* ============================================================
+   MAIN LOOP
+============================================================ */
+const clock = new THREE.Clock();
+const _look = new THREE.Vector3();
+
+function animate(){
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  tSim += dt * speedScale;
+  const now = performance.now();
+
+  /* --- shell + star clocks --- */
+  for (const m of fluxMaterials) m.uniforms.uTime.value = tSim;
+  for (const m of dustMaterials) m.uniforms.uTime.value = tSim;
+  starMat.uniforms.uTime.value = tSim;
+
+  /* --- gentle counter-rotation of the two ejecta events --- */
+  innerShell.rotation.y = tSim * 0.008;
+  outerShell.rotation.y = -tSim * 0.005;
+  halo.rotation.y = tSim * 0.003;
+
+  /* --- white dwarf shimmer --- */
+  const pulse = 1 + 0.08 * Math.sin(tSim * 7.0) + 0.04 * Math.sin(tSim * 13.7);
+  dwarfGlow.material.opacity = 0.85 * pulse;
+  dwarfCore.material.opacity = 0.90 * pulse;
+  spikeH.material.opacity = 0.30 * pulse;
+  spikeV.material.opacity = 0.22 * pulse;
+
+  /* --- camera --- */
+  if (mode === 'drift'){
+    driftPose(tSim);
+    camera.position.copy(pose.pos);
+    lookSmooth.lerp(pose.look, 1 - Math.exp(-dt * 1.5));
+    camera.lookAt(lookSmooth);
+    controls.target.copy(lookSmooth);          // keep handoff seamless
+  } else if (mode === 'transit'){
+    trans.t += dt;
+    const k = smooth(Math.min(trans.t / trans.dur, 1));
+    let targetPos, targetLook;
+    if (trans.useDrift){
+      driftPose(tSim);
+      targetPos = pose.pos; targetLook = pose.look;
+    } else {
+      targetPos = trans.toPos; targetLook = trans.toLook;
+    }
+    camera.position.lerpVectors(trans.from, targetPos, k);
+    _look.lerpVectors(trans.fromLook, targetLook, k);
+    lookSmooth.copy(_look);
+    camera.lookAt(lookSmooth);
+    controls.target.copy(lookSmooth);
+    if (trans.t >= trans.dur){
+      trans.active = false;
+      mode = trans.after;
+      controls.autoRotate = (mode === 'orbit');
+      updateModeUI();
+    }
+  } else { // orbit — recentre gently on the dwarf, then let the user fly
+    controls.target.lerp(_look.set(0,0,0), 1 - Math.exp(-dt * 0.8));
+    controls.update();
+    lookSmooth.copy(controls.target);
+  }
+
+  updateTelemetry(now);
+  composer.render();
+}
+animate();
+updateModeUI();
+
+/* ---------- resize ---------- */
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  composer.setSize(window.innerWidth, window.innerHeight);
+});
+
+/* ---------- loader out ---------- */
+setTimeout(() => {
+  const l = document.getElementById('loader');
+  l.style.opacity = '0';
+  l.style.pointerEvents = 'none';
+  setTimeout(() => l.remove(), 1300);
+}, 1500);
+
+/* ---------- icons ---------- */
+if (window.lucide) lucide.createIcons();
+</script>
+</body>
+</html>
