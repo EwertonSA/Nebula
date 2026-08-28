@@ -403,7 +403,7 @@ function buildShell(cfg){
   return group;
 }
 
-const innerShell = buildShell({
+const innerShell = window.innerShell = buildShell({
   asset: window.INNER_SHELL_GLB,
   major: 9.7, meshScale: 3.0, tilt: 0.06,
   scaleX: 1.0, scaleY: 0.82, scaleZ: 0.3,
@@ -413,7 +413,7 @@ const innerShell = buildShell({
   layers: [ { scale: 1.0, intensity: 0.50, seed: 1.0 }, { scale: 1.05, intensity: 0.32, seed: 4.2 } ],
 });
 
-const outerShell = buildShell({
+const outerShell = window.outerShell = buildShell({
   asset: window.OUTER_SHELL_GLB,
   major: 17.7, meshScale: 4.0, tilt: -0.14,
   scaleX: 1.0, scaleY: 0.79, scaleZ: 0.3,
@@ -467,7 +467,7 @@ function glowTexture(){
 }
 const glowTex = glowTexture();
 
-const dwarf = new THREE.Mesh(
+const dwarf = window.dwarf = new THREE.Mesh(
   new THREE.SphereGeometry(0.17, 32, 24),
   new THREE.MeshBasicMaterial({ color: new THREE.Color(3.0, 3.4, 4.2) })
 );
