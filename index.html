@@ -670,7 +670,7 @@ controls.autoRotateSpeed = 0.45;
 const pose = { pos: new THREE.Vector3(), look: new THREE.Vector3() };
 function driftPose(t){
   const a = t * 0.028;
-  const r = 19.5 + 10.5 * Math.sin(t * 0.045 + 1.2);
+  const r = 65 + 10.5 * Math.sin(t * 0.045 + 1.2);
   const y = 7.5 * Math.sin(t * 0.06 + 0.5);
   pose.pos.set(Math.cos(a) * r, y, Math.sin(a) * r);
   pose.look.set(Math.cos(t * 0.11) * 2.4, Math.sin(t * 0.09) * 1.7, Math.sin(t * 0.13) * 2.4);
