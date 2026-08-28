@@ -233,6 +233,8 @@ container.appendChild(renderer.domElement);
 renderer.domElement.addEventListener('contextmenu', e => e.preventDefault());
 
 const scene = new THREE.Scene();
+window.THREE = THREE;
+window.scene = scene;
 const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 3000);
 // Expose scene controls for E2E inspection and camera interaction tests.
 window.camera = camera;
@@ -398,6 +400,7 @@ function buildShell(cfg){
       meshIndex += 1;
     });
     group.add(model);
+    group.userData.loaded = true;
   }, undefined, (error) => {
     console.error(`Unable to load ${cfg.asset}`, error);
   });
