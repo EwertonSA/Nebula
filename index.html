@@ -352,6 +352,7 @@ const gltfLoader = new GLTFLoader();
 
 function buildShell(cfg){
   const group = new THREE.Group();
+  const baseSize = cfg.major * (cfg.meshScale ?? 1.0);
   group.rotation.z = cfg.tilt ?? 0;
   scene.add(group);
 
@@ -360,9 +361,9 @@ function buildShell(cfg){
     model.rotation.y = cfg.rotationY ?? 0;
     model.rotation.z = cfg.rotationZ ?? 0;
     model.scale.set(
-      cfg.major * cfg.scaleX,
-      cfg.major * cfg.scaleY,
-      cfg.major * cfg.scaleZ,
+      baseSize * cfg.scaleX,
+      baseSize * cfg.scaleY,
+      baseSize * cfg.scaleZ,
     );
     model.updateMatrixWorld(true);
 
@@ -404,8 +405,8 @@ function buildShell(cfg){
 
 const innerShell = buildShell({
   asset: window.INNER_SHELL_GLB,
-  major: 8, tilt: 0.06,
-  scaleX: 1.0, scaleY: 0.82, scaleZ: 1.0,
+  major: 9.7, meshScale: 3.0, tilt: 0.06,
+  scaleX: 1.0, scaleY: 0.82, scaleZ: 0.3,
   positionX: 0, positionY: 0, positionZ: 0,
   colorA: [0.03, 0.19, 0.23], colorB: [0.45, 1.05, 0.88],   // ionised oxygen teal
   noiseScale: 0.55, fresnelPow: 1.6, flow: 1.0,
@@ -414,8 +415,8 @@ const innerShell = buildShell({
 
 const outerShell = buildShell({
   asset: window.OUTER_SHELL_GLB,
-  major: 14.8, tilt: -0.14,
-  scaleX: 1.0, scaleY: 0.79, scaleZ: 1.0,
+  major: 17.7, meshScale: 4.0, tilt: -0.14,
+  scaleX: 1.0, scaleY: 0.79, scaleZ: 0.3,
   positionX: 0, positionY: 0, positionZ: 0,
   colorA: [0.16, 0.045, 0.02], colorB: [1.10, 0.42, 0.17],  // hydrogen-alpha ember
   noiseScale: 0.30, fresnelPow: 2.0, flow: 0.6,
