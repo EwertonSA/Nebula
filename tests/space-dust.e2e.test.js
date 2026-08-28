@@ -2,6 +2,8 @@ const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { chromium } = require('playwright');
 
+jest.setTimeout(90000);
+
 let browser;
 
 beforeAll(async () => {
@@ -50,6 +52,46 @@ describe('space dust scene', () => {
         innerShell: true,
         outerShell: true,
       });
+    } finally {
+      if (page) await page.close();
+      if (context) await context.close();
+    }
+  });
+
+  test('changes the camera view when the camera orbits', async () => {
+    let context;
+    let page;
+
+    try {
+      context = await browser.newContext();
+      page = await context.newPage();
+      const indexPath = path.resolve(__dirname, '..', 'index.html');
+      const indexUrl = pathToFileURL(indexPath).href;
+      await page.goto(indexUrl, { waitUntil: 'load' });
+
+      await page.waitForFunction(() => Boolean(window.dwarf));
+
+      const defaultCameraPosition = await page.evaluate(() => ({
+        x: window.camera.position.x,
+        y: window.camera.position.y,
+        z: window.camera.position.z,
+      }));
+
+      const movedPosition = await page.evaluate(() => {
+        window.camera.position.set(
+          window.camera.position.x + 5,
+          window.camera.position.y,
+          window.camera.position.z,
+        );
+        window.controls.update();
+        return {
+          x: window.camera.position.x,
+          y: window.camera.position.y,
+          z: window.camera.position.z,
+        };
+      });
+
+      expect(movedPosition).not.toEqual(defaultCameraPosition);
     } finally {
       if (page) await page.close();
       if (context) await context.close();

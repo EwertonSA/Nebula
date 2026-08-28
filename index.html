@@ -234,6 +234,8 @@ renderer.domElement.addEventListener('contextmenu', e => e.preventDefault());
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 3000);
+// Expose scene controls for E2E inspection and camera interaction tests.
+window.camera = camera;
 
 /* ============================================================
    SHARED GLSL — value noise + fbm
@@ -647,6 +649,7 @@ composer.addPass(new OutputPass());
    CAMERA CHOREOGRAPHY — drift <-> orbit <-> fly
 ============================================================ */
 const controls = new OrbitControls(camera, renderer.domElement);
+window.controls = controls;
 controls.enableDamping = true;
 controls.dampingFactor = 0.06;
 controls.rotateSpeed = 0.5;
