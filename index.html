@@ -206,9 +206,12 @@
     <p class="hud-label text-white/25">the ring is a shell seen true</p>
   </div>
 
+<script src="./assets/InnerShell.js"></script>
+<script src="./assets/OuterShell.js"></script>
 <script type="module">
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
@@ -337,6 +340,7 @@ function volumeMaterial(opts){
     side: THREE.DoubleSide,
   });
   mat.userData.baseIntensity = opts.intensity;
+  mat.userData.layers = opts.layers ?? [];
   fluxMaterials.push(mat);
   return mat;
 }
@@ -344,37 +348,75 @@ function volumeMaterial(opts){
 /* ============================================================
    THE TWO SHELLS — bright inner [O III], faint elder H-alpha
 ============================================================ */
+const gltfLoader = new GLTFLoader();
+
 function buildShell(cfg){
   const group = new THREE.Group();
   group.rotation.z = cfg.tilt ?? 0;
-  for (const layer of cfg.layers){
-    const geo = new THREE.TorusGeometry(cfg.major, cfg.tube, 52, 200);
-    const mat = volumeMaterial({
-      colorA: cfg.colorA, colorB: cfg.colorB,
-      intensity: layer.intensity,
-      noiseScale: cfg.noiseScale,
-      seed: layer.seed,
-      fresnelPow: cfg.fresnelPow,
-      flow: cfg.flow,
-    });
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.rotation.x = Math.PI / 2;      // ring plane -> XZ, axis -> Y
-    mesh.scale.setScalar(layer.scale);
-    group.add(mesh);
-  }
   scene.add(group);
+
+  gltfLoader.load(cfg.asset, ({ scene: model }) => {
+    model.rotation.x = Math.PI / 2;
+    model.rotation.y = cfg.rotationY ?? 0;
+    model.rotation.z = cfg.rotationZ ?? 0;
+    model.scale.set(
+      cfg.major * cfg.scaleX,
+      cfg.major * cfg.scaleY,
+      cfg.major * cfg.scaleZ,
+    );
+    model.updateMatrixWorld(true);
+
+    // Center the imported geometry before applying its explicit offset.
+    const modelCenter = new THREE.Box3().setFromObject(model).getCenter(new THREE.Vector3());
+    model.position.set(
+      cfg.positionX - modelCenter.x,
+      cfg.positionY - modelCenter.y,
+      cfg.positionZ - modelCenter.z,
+    );
+
+    let meshIndex = 0;
+    model.traverse((child) => {
+      if (!child.isMesh) return;
+      const layer = cfg.layers[meshIndex % cfg.layers.length] ?? {};
+      child.material = volumeMaterial({
+        colorA: cfg.colorA,
+        colorB: cfg.colorB,
+        noiseScale: cfg.noiseScale,
+        fresnelPow: cfg.fresnelPow,
+        flow: cfg.flow,
+        intensity: layer.intensity ?? cfg.intensity,
+        seed: layer.seed ?? cfg.seed,
+        layers: cfg.layers,
+      });
+      child.material.side = THREE.DoubleSide;
+      child.material.transparent = true;
+      child.material.depthWrite = false;
+      child.renderOrder = cfg.renderOrder ?? 0;
+      meshIndex += 1;
+    });
+    group.add(model);
+  }, undefined, (error) => {
+    console.error(`Unable to load ${cfg.asset}`, error);
+  });
+
   return group;
 }
 
 const innerShell = buildShell({
-  major: 8, tube: 1.9, tilt: 0.06,
+  asset: window.INNER_SHELL_GLB,
+  major: 8, tilt: 0.06,
+  scaleX: 1.0, scaleY: 0.82, scaleZ: 1.0,
+  positionX: 0, positionY: 0, positionZ: 0,
   colorA: [0.03, 0.19, 0.23], colorB: [0.45, 1.05, 0.88],   // ionised oxygen teal
   noiseScale: 0.55, fresnelPow: 1.6, flow: 1.0,
   layers: [ { scale: 1.0, intensity: 0.50, seed: 1.0 }, { scale: 1.05, intensity: 0.32, seed: 4.2 } ],
 });
 
 const outerShell = buildShell({
-  major: 14.8, tube: 3.6, tilt: -0.14,
+  asset: window.OUTER_SHELL_GLB,
+  major: 14.8, tilt: -0.14,
+  scaleX: 1.0, scaleY: 0.79, scaleZ: 1.0,
+  positionX: 0, positionY: 0, positionZ: 0,
   colorA: [0.16, 0.045, 0.02], colorB: [1.10, 0.42, 0.17],  // hydrogen-alpha ember
   noiseScale: 0.30, fresnelPow: 2.0, flow: 0.6,
   layers: [ { scale: 1.0, intensity: 0.30, seed: 2.3 }, { scale: 1.07, intensity: 0.18, seed: 6.7 } ],
